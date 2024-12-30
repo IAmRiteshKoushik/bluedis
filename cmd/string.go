@@ -183,13 +183,13 @@ func Delete(args []resp.Value) resp.Value {
         SETsMu.Unlock()
 
         // Remove key from listStore
-        listStoreMu.Lock()
-        if _, ok := listStore[key]; ok {
-            delete(listStore, key)
+        ListStoreMu.Lock()
+        if _, ok := ListStore[key]; ok {
+            delete(ListStore, key)
             fmt.Println("DEL: list key=", key)
             deletedCount++
         }
-        listStoreMu.Unlock()
+        ListStoreMu.Unlock()
     }
     fmt.Println("DEL: deletedCount=", deletedCount)
     return resp.Value{

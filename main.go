@@ -11,6 +11,8 @@ import (
 	"github.com/IAmRiteshKoushik/bluedis/aof"
 	"github.com/IAmRiteshKoushik/bluedis/cmd"
 	"github.com/IAmRiteshKoushik/bluedis/resp"
+	"github.com/IAmRiteshKoushik/bluedis/store"
+
 )
 
 func main() {
@@ -88,6 +90,60 @@ func main() {
 					cmd.SETsMu.Lock()
 					delete(cmd.SETs, arg.Bulk)
 					cmd.SETsMu.Unlock()
+				}
+			case "LPUSH", "RPUSH":
+				if len(args) == 2 {
+					key := args[0].Bulk
+					values := args[1].Bulk
+					
+					cmd.ListStoreMu.Lock()
+					list, exists := cmd.ListStore[key]
+					if !exists {
+						list = store.NewDoublyLinkedList()
+						cmd.ListStore[key] = list
+					}
+					for _, arg := range values {
+						if command == "LPUSH" {
+							list.PushLeft(arg)
+						} else {
+							list.PushRight(arg)
+						}
+					}
+					cmd.ListStoreMu.Unlock()
+				}
+			
+			case "LPOP", "RPOP":
+				if len(args) >= 1 {
+					key := args[0].Bulk
+					count := 1
+					if len(args) == 2 {
+						count, _ = strconv.Atoi(args[1].Bulk)
+					}
+					
+					cmd.ListStoreMu.Lock()
+					list, exists := cmd.ListStore[key]
+					if exists && list.Length() > 0 {
+						for i := 0; i < count && list.Length() > 0; i++ {
+							if command == "LPOP" {
+								list.PopLeft()
+							} else {
+								list.PopRight()
+							}
+						}
+					}
+					cmd.ListStoreMu.Unlock()
+				}
+			case "BLPOP":
+				if len(args) >= 2 {
+					key := args[0].Bulk
+					cmd.ListStoreMu.Lock()
+					list, exists := cmd.ListStore[key]
+					if exists && list.Length() > 0 {
+						if command == "BLPOP" {
+							list.BlockingPopLeft()
+						}
+					}
+					cmd.ListStoreMu.Unlock()
 				}
 			}
 		}
@@ -179,7 +235,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" {
 				aof.Write(value)
 			}
 
