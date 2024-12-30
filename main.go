@@ -94,7 +94,7 @@ func main() {
 			case "LPUSH", "RPUSH":
 				if len(args) == 2 {
 					key := args[0].Bulk
-					value := args[1].Bulk
+					values := args[1].Bulk
 					
 					cmd.ListStoreMu.Lock()
 					list, exists := cmd.ListStore[key]
@@ -102,10 +102,12 @@ func main() {
 						list = store.NewDoublyLinkedList()
 						cmd.ListStore[key] = list
 					}
-					if command == "LPUSH" {
-						list.PushLeft(value)
-					} else {
-						list.PushRight(value)
+					for _, arg := range values {
+						if command == "LPUSH" {
+							list.PushLeft(arg)
+						} else {
+							list.PushRight(arg)
+						}
 					}
 					cmd.ListStoreMu.Unlock()
 				}
@@ -233,7 +235,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" {
 				aof.Write(value)
 			}
 
