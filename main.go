@@ -15,6 +15,9 @@ import (
 
 func main() {
 
+	// store.BloomFilterTest()
+	// return
+
 	// Creating a new server / listener
 	l, err := net.Listen("tcp", ":6379")
 	if err != nil {

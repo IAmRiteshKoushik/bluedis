@@ -1,12 +1,14 @@
-package main
+package store
 
 import (
 	"fmt"
 	"hash"
 	"hash/fnv"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/IAmRiteshKoushik/bluedis/resp"
 	"github.com/pierrec/xxHash/xxHash32"
 	"github.com/twmb/murmur3"
 )
@@ -14,6 +16,7 @@ import (
 type BloomFilter struct {
 	filter []uint8
 	size   uint32
+	mux    sync.RWMutex
 }
 
 // All the hashfunctions will be stored in this map
@@ -24,8 +27,8 @@ var hashFunctions = map[string]hash.Hash32{
 }
 
 // A common hash function that takes in the hasher and returns the hash
-func getHash(hasher hash.Hash32, data string) uint32 {
-	hasher.Write([]byte(data))
+func getHash(hasher hash.Hash32, data resp.Value) uint32 {
+	hasher.Write([]byte(data.Bulk))
 	hashedSum := hasher.Sum32()
 	hasher.Reset()
 	return hashedSum
@@ -38,7 +41,9 @@ func getHash(hasher hash.Hash32, data string) uint32 {
 // The total size of the bloom filter is the size*8, as we are storing the 1's in BITS
 // byteIdx is hashIdx/8, as technically we only have "size" no.of array indexes not "size*8"
 // bitIdx is hashIdx%8 to get the exact bit in the byte
-func (bf *BloomFilter) Add(data string) {
+func (bf *BloomFilter) Add(data resp.Value) {
+	bf.mux.Lock()
+	defer bf.mux.Unlock()
 	for _, hasher := range hashFunctions {
 		hashIdx := getHash(hasher, data) % (bf.size * 8)
 		byteIdx := hashIdx / 8
@@ -50,7 +55,9 @@ func (bf *BloomFilter) Add(data string) {
 
 // IF there exists "true" for every hash%size in the filter, it means the element exists in the filter
 // Even if one hash is off, the element doesn't exist, return false
-func (bf *BloomFilter) Exists(data string) bool {
+func (bf *BloomFilter) Exists(data resp.Value) bool {
+	bf.mux.RLock()
+	defer bf.mux.RUnlock()
 	for _, hasher := range hashFunctions {
 		hashIdx := getHash(hasher, data) % (bf.size * 8)
 		byteIdx := hashIdx / 8
@@ -62,26 +69,27 @@ func (bf *BloomFilter) Exists(data string) bool {
 	return true
 }
 
-func NewBloomFilter(size uint32) BloomFilter {
-	return BloomFilter{
+func NewBloomFilter(size int) *BloomFilter {
+	return &BloomFilter{
 		filter: make([]uint8, size),
-		size:   size,
+		size:   uint32(size),
+		mux:    sync.RWMutex{},
 	}
 }
 
-func bloomFilter() {
+func BloomFilterTest() {
 	// Testing to see how the false-positivity rate scales as compared to bloomfilter size
 	for j := 75000; j < 100000; j += 500 {
-		bloom := NewBloomFilter(uint32(j))
+		bloom := NewBloomFilter(j)
 		// Adding 75000 elements
 		// Checking false positivity for 25000 elements
 		for i := 0; i < 75000; i++ {
-			bloom.Add(strconv.Itoa(i))
+			bloom.Add(resp.Value{Bulk: strconv.Itoa(i)})
 		}
 
 		falsePositives := 0.0
 		for i := 75000; i < 100000; i++ {
-			if bloom.Exists(strconv.Itoa(i)) {
+			if bloom.Exists(resp.Value{Bulk: strconv.Itoa(i)}) {
 				falsePositives++
 			}
 		}
