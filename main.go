@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/IAmRiteshKoushik/bluedis/aof"
 	"github.com/IAmRiteshKoushik/bluedis/cmd"
@@ -14,9 +13,6 @@ import (
 )
 
 func main() {
-
-	// store.BloomFilterTest()
-	// return
 
 	// Creating a new server / listener
 	l, err := net.Listen("tcp", ":6379")
@@ -38,61 +34,8 @@ func main() {
 		if value.Typ == "array" && len(value.Array) > 0 {
 			command := strings.ToUpper(value.Array[0].Bulk)
 			args := value.Array[1:]
-
-			switch command {
-			case "SET":
-				if len(args) >= 2 {
-					key := args[0].Bulk
-					val := args[1].Bulk
-					cmd.SETsMu.Lock()
-					currentVal := cmd.Values{Content: val, HasExpiry: false}
-					cmd.SETs[key] = currentVal
-					cmd.SETsMu.Unlock()
-					// Handle EX/PX during reconstruction
-					for i := 2; i < len(args); i += 2 {
-						if i+1 < len(args) {
-							switch strings.ToUpper(args[i].Bulk) {
-							case "EX":
-								seconds, _ := strconv.Atoi(args[i+1].Bulk)
-								cmd.SETsMu.Lock()
-								currentVal := cmd.SETs[key]
-								currentVal.Begone = time.Now().Add(time.Duration(seconds) * time.Second)
-								currentVal.HasExpiry = true
-								cmd.SETs[key] = currentVal
-								cmd.SETsMu.Unlock()
-							case "PX":
-								milliseconds, _ := strconv.ParseInt(args[i+1].Bulk, 10, 64)
-								cmd.SETsMu.Lock()
-								currentVal := cmd.SETs[key]
-								currentVal.Begone = time.Now().Add(time.Duration(milliseconds) * time.Millisecond)
-								currentVal.HasExpiry = true
-								cmd.SETs[key] = currentVal
-								cmd.SETsMu.Unlock()
-							}
-						}
-					}
-				}
-			case "EXPIRE":
-				if len(args) >= 2 {
-					key := args[0].Bulk
-					seconds, _ := strconv.Atoi(args[1].Bulk)
-					expiryTime := time.Now().Add(time.Duration(seconds) * time.Second)
-					cmd.SETsMu.Lock()
-					fmt.Println("EXPIRE: key=", key, "expiryTime=", expiryTime, "SETs[key]=", cmd.SETs[key])
-					if val, ok := cmd.SETs[key]; ok {
-						val.HasExpiry = true
-						val.Begone = expiryTime
-						cmd.SETs[key] = val
-					}
-					cmd.SETsMu.Unlock()
-				}
-			case "DEL":
-				for _, arg := range args {
-					cmd.SETsMu.Lock()
-					delete(cmd.SETs, arg.Bulk)
-					cmd.SETsMu.Unlock()
-				}
-			}
+			handler := cmd.Handlers[command]
+			handler(args)
 		}
 	})
 
@@ -182,7 +125,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" || command == "BF.RESERVE" || command == "BF.ADD" || command == "BF.MADD" || command == "BF.INSERT" {
 				aof.Write(value)
 			}
 

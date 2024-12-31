@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"strconv"
 	"sync"
 
@@ -13,9 +12,11 @@ var bloomStore = make(map[string]*store.BloomFilter)
 var bloomStoreMu sync.RWMutex
 
 func BFReserve(args []resp.Value) resp.Value {
-	log.Println(args)
 	if len(args) != 2 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'BF.RESERVE' command"}
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.RESERVE' command",
+		}
 	}
 	key := args[0].Bulk
 	capacity := args[1].Bulk
@@ -36,7 +37,10 @@ func BFReserve(args []resp.Value) resp.Value {
 
 func BFAdd(args []resp.Value) resp.Value {
 	if len(args) != 2 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'BF.ADD' command"}
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.ADD' command",
+		}
 	}
 	key := args[0].Bulk
 	item := args[1]
@@ -73,8 +77,11 @@ func BFExists(args []resp.Value) resp.Value {
 	bloomStoreMu.RLock()
 	defer bloomStoreMu.RUnlock()
 
-	if len(args) != 3 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'BF.EXISTS' command"}
+	if len(args) != 2 {
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.EXISTS' command",
+		}
 	}
 	key := args[0].Bulk
 	value := args[1]
@@ -100,16 +107,16 @@ func BFExists(args []resp.Value) resp.Value {
 	}
 }
 
-// A Mix between BF.RESERVE and BF.MADD
+// Helper function for BF.INSERT and BF.MADD
 func insertItems(args []resp.Value, start int, filter *store.BloomFilter) resp.Value {
 	bloomStoreMu.Lock()
 	defer bloomStoreMu.Unlock()
 	resultArray := resp.Value{
-		Typ: "array",
+		Typ:   "array",
+		Array: make([]resp.Value, 0),
 	}
 	for i := start; i < len(args); i++ {
 		value := args[i]
-		log.Println(value)
 		if filter.Exists(value) {
 			resultArray.Array = append(resultArray.Array, resp.Value{
 				Typ: "integer",
@@ -125,10 +132,15 @@ func insertItems(args []resp.Value, start int, filter *store.BloomFilter) resp.V
 	}
 	return resultArray
 }
+
+// A Mix between BF.RESERVE and BF.MADD
+// TODO : Change error to empty array
 func BFInsert(args []resp.Value) resp.Value {
-	log.Println(args)
-	if len(args) < 4 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'BF.INSERT' command"}
+	if len(args) < 2 {
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.INSERT' command",
+		}
 	}
 	key := args[0].Bulk
 	optArgument, optVal := args[1].Bulk, args[2].Bulk
@@ -138,16 +150,16 @@ func BFInsert(args []resp.Value) resp.Value {
 		switch optArgument {
 		case "NOCREATE":
 			return resp.Value{
-				Typ:   "array",
-				Array: make([]resp.Value, 0),
+				Typ: "error",
+				Str: "ERR filter doesn't exist + NOCREATE for 'BF.INSERT' command",
 			}
 
 		case "CAPACITY":
 			capacity, err := strconv.Atoi(optVal)
 			if err != nil {
 				return resp.Value{
-					Typ:   "array",
-					Array: make([]resp.Value, 0),
+					Typ: "error",
+					Str: "ERR capacity is not an integer for 'BF.INSERT' command",
 				}
 			}
 			filter = store.NewBloomFilter(capacity)
@@ -161,8 +173,8 @@ func BFInsert(args []resp.Value) resp.Value {
 		// IF any other argument,
 		default:
 			return resp.Value{
-				Typ:   "array",
-				Array: make([]resp.Value, 0),
+				Typ: "error",
+				Str: "ERR invalid arguments for 'BF.INSERT' command",
 			}
 		}
 
@@ -185,8 +197,8 @@ func BFInsert(args []resp.Value) resp.Value {
 			default:
 				// Any other argument is not allowed
 				return resp.Value{
-					Typ:   "array",
-					Array: make([]resp.Value, 0),
+					Typ: "error",
+					Str: "ERR invalid arguments for BF.INSERT",
 				}
 			}
 		}
@@ -198,10 +210,59 @@ func BFInsert(args []resp.Value) resp.Value {
 	}
 }
 
-func BFMAdd([]resp.Value) resp.Value {
-	return resp.Value{}
+func BFMAdd(args []resp.Value) resp.Value {
+	if len(args) < 1 {
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.MADD' command",
+		}
+	}
+	key := args[0].Bulk
+	bloomStoreMu.Lock()
+	filter, exists := bloomStore[key]
+	if !exists {
+		filter = store.NewBloomFilter(10000)
+		bloomStore[key] = filter
+	}
+	bloomStoreMu.Unlock()
+	return insertItems(args, 1, filter)
 }
 
-func BFMExists([]resp.Value) resp.Value {
-	return resp.Value{}
+func BFMExists(args []resp.Value) resp.Value {
+	if len(args) < 2 {
+		return resp.Value{
+			Typ: "error",
+			Str: "ERR wrong number of arguments for 'BF.MEXISTS' command ",
+		}
+	}
+	key := args[0].Bulk
+	bloomStoreMu.RLock()
+	filter, exists := bloomStore[key]
+	resultArray := resp.Value{
+		Typ:   "array",
+		Array: make([]resp.Value, 0),
+	}
+
+	for idx := 1; idx < len(args); idx++ {
+		if !exists {
+			resultArray.Array = append(resultArray.Array, resp.Value{
+				Typ: "integer",
+				Num: 0,
+			})
+		} else {
+			if filter.Exists(args[idx]) {
+				resultArray.Array = append(resultArray.Array, resp.Value{
+					Typ: "integer",
+					Num: 1,
+				})
+			} else {
+				resultArray.Array = append(resultArray.Array, resp.Value{
+					Typ: "integer",
+					Num: 0,
+				})
+			}
+		}
+	}
+	bloomStoreMu.RUnlock()
+	return resultArray
 }
