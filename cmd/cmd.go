@@ -22,6 +22,13 @@ var Handlers = map[string]func([]resp.Value) resp.Value{
 	"BLPOP":   Blpop,
 	"EXPIRE":  ExpireHandler,
 	"DEL":     Delete,
+	"ZADD":    Zadd,
+    "ZREM":    Zrem,
+    "ZRANGE":  Zrange,
+    "ZUPDATE": ZupdateScore,
+    "ZTOPK":   ZtopK,
+    "ZRANKTOP":Zranktop,
+    "ZRANKBOTTOM":Zrankbottom,
 }
 
 type Values struct {
