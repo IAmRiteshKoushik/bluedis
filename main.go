@@ -145,43 +145,6 @@ func main() {
 					}
 					cmd.ListStoreMu.Unlock()
 				}
-			case "SETBIT":
-				if len(args) == 3 {
-					key := args[0].Bulk
-					pos, _ := strconv.ParseUint(args[1].Bulk, 10, 64)
-					value, _ := strconv.Atoi(args[2].Bulk)
-					cmd.BitMapStoreMu.Lock()
-					bitmap, exists := cmd.BitMapStore[key]
-					if !exists {
-						bitmap = store.NewStringBitMap()
-						cmd.BitMapStore[key] = bitmap
-					}
-					bitmap.SetBit(key, pos, value == 1)
-					cmd.BitMapStoreMu.Unlock()
-				}
-			
-			case "GETBIT":
-				if len(args) == 2 {
-					key := args[0].Bulk
-					pos, _ := strconv.ParseUint(args[1].Bulk, 10, 64)
-					cmd.BitMapStoreMu.Lock()
-					bitmap, exists := cmd.BitMapStore[key]
-					if exists {
-						bitmap.GetBit(key, pos)
-					}
-					cmd.BitMapStoreMu.Unlock()
-				}
-			
-			case "BITCOUNT":
-				if len(args) == 1 {
-					key := args[0].Bulk
-					cmd.BitMapStoreMu.Lock()
-					bitmap, exists := cmd.BitMapStore[key]
-					if exists {
-						bitmap.PopCount(key)
-					}
-					cmd.BitMapStoreMu.Unlock()
-				}
 			}
 		}
 	})
@@ -272,7 +235,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "SETBIT" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" {
 				aof.Write(value)
 			}
 
