@@ -92,7 +92,7 @@ func main() {
 					cmd.SETsMu.Unlock()
 				}
 			case "LPUSH", "RPUSH":
-				if len(args) == 2 {
+				if len(args) >= 2 {
 					key := args[0].Bulk
 					values := args[1].Bulk
 					
