@@ -36,6 +36,32 @@ func Lpush(args []resp.Value) resp.Value {
 	return resp.Value{Typ: "integer", Num: length}
 }
 
+func Rpush(args []resp.Value) resp.Value {
+	if len(args) < 2 {
+		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'rpush' command"}
+	}
+
+	key := args[0].Bulk
+	elements := args[1:]
+
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
+	if (!exists) {
+		list = store.NewDoublyLinkedList()
+		ListStore[key] = list
+	}
+	for _, element := range elements {
+		list.PushRight(element.Bulk)
+	}
+	length := list.Length()
+	ListStoreMu.Unlock()
+
+	return resp.Value{
+		Typ: "integer",
+		Num: length,
+	}
+}
+
 func Lpop(args []resp.Value) resp.Value {
 	if len(args) < 1 || len(args) > 2 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'lpop' command"}
@@ -55,52 +81,26 @@ func Lpop(args []resp.Value) resp.Value {
 	list, exists := ListStore[key]
 	if !exists || list.Length() == 0 {
 		ListStoreMu.Unlock()
-		fmt.Println("List does not exist or is empty")
 		return resp.Value{Typ: "null"}
 	}
-	ListStoreMu.Unlock()
 
 	result := make([]resp.Value, 0, count)
 	for i := 0; i < count && list.Length() > 0; i++ {
 		value, ok := list.PopLeft()
 		if !ok {
-			fmt.Println("Failed to pop from list")
+			ListStoreMu.Unlock()
 			return resp.Value{Typ: "null"}
 		}
 		result = append(result, resp.Value{Typ: "bulk", Bulk: fmt.Sprintf("%v", value)})
 	}
-
-	// If only one element is popped, return it as a bulk string wrapped in a Value.
-	if len(result) == 1 {
-		return resp.Value{Typ: "bulk", Bulk: result[0].Bulk}
-	}
-	// Otherwise, return an array of bulk strings.
-	return resp.Value{Typ: "array", Array: result}
-}
-
-func Rpush(args []resp.Value) resp.Value {
-	if len(args) < 2 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'rpush' command"}
-	}
-
-	key := args[0].Bulk
-	elements := args[1:]
-
-	ListStoreMu.Lock()
-	list, exists := ListStore[key]
-	if !exists {
-		list = store.NewDoublyLinkedList()
-		ListStore[key] = list
-	}
-	for _, element := range elements {
-		list.PushRight(element.Bulk)
-	}
-	length := list.Length()
 	ListStoreMu.Unlock()
 
+	if len(result) == 1 {
+		return result[0]
+	}
 	return resp.Value{
-		Typ: "integer",
-		Num: length,
+		Typ:   "array",
+		Array: result,
 	}
 }
 

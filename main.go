@@ -94,7 +94,6 @@ func main() {
 			case "LPUSH", "RPUSH":
 				if len(args) >= 2 {
 					key := args[0].Bulk
-					values := args[1].Bulk
 					
 					cmd.ListStoreMu.Lock()
 					list, exists := cmd.ListStore[key]
@@ -102,27 +101,34 @@ func main() {
 						list = store.NewDoublyLinkedList()
 						cmd.ListStore[key] = list
 					}
-					for _, arg := range values {
-						if command == "LPUSH" {
-							list.PushLeft(arg)
-						} else {
-							list.PushRight(arg)
+					
+					if command == "LPUSH" {
+						// For LPUSH, process values in reverse order to maintain correct order
+						for i := len(args) - 1; i >= 1; i-- {
+							list.PushLeft(args[i].Bulk)
+						}
+					} else { // RPUSH
+						// For RPUSH, process values in forward order
+						for i := 1; i < len(args); i++ {
+							list.PushRight(args[i].Bulk)
 						}
 					}
+					
 					cmd.ListStoreMu.Unlock()
 				}
-			
 			case "LPOP", "RPOP":
 				if len(args) >= 1 {
 					key := args[0].Bulk
 					count := 1
-					if len(args) == 2 {
-						count, _ = strconv.Atoi(args[1].Bulk)
+					if len(args) >= 2 {
+						parsedCount, err := strconv.Atoi(args[1].Bulk)
+						if err == nil && parsedCount > 0 {
+							count = parsedCount
+						}
 					}
 					
 					cmd.ListStoreMu.Lock()
-					list, exists := cmd.ListStore[key]
-					if exists && list.Length() > 0 {
+					if list, exists := cmd.ListStore[key]; exists {
 						for i := 0; i < count && list.Length() > 0; i++ {
 							if command == "LPOP" {
 								list.PopLeft()
@@ -130,20 +136,64 @@ func main() {
 								list.PopRight()
 							}
 						}
+						// Remove the key if list is empty
+						if list.Length() == 0 {
+							delete(cmd.ListStore, key)
+						}
 					}
 					cmd.ListStoreMu.Unlock()
 				}
+			
 			case "BLPOP":
 				if len(args) >= 2 {
 					key := args[0].Bulk
 					cmd.ListStoreMu.Lock()
 					list, exists := cmd.ListStore[key]
 					if exists && list.Length() > 0 {
-						if command == "BLPOP" {
-							list.BlockingPopLeft()
+						list.BlockingPopLeft()
+						// Remove the key if list is empty
+						if list.Length() == 0 {
+							delete(cmd.ListStore, key)
 						}
 					}
 					cmd.ListStoreMu.Unlock()
+				}
+			case "SETBIT":
+				if len(args) == 3 {
+					key := args[0].Bulk
+					pos, _ := strconv.ParseUint(args[1].Bulk, 10, 64)
+					value, _ := strconv.Atoi(args[2].Bulk)
+					cmd.BitMapStoreMu.Lock()
+					bitmap, exists := cmd.BitMapStore[key]
+					if !exists {
+						bitmap = store.NewStringBitMap()
+						cmd.BitMapStore[key] = bitmap
+					}
+					bitmap.SetBit(key, pos, value == 1)
+					cmd.BitMapStoreMu.Unlock()
+				}
+			
+			case "GETBIT":
+				if len(args) == 2 {
+					key := args[0].Bulk
+					pos, _ := strconv.ParseUint(args[1].Bulk, 10, 64)
+					cmd.BitMapStoreMu.Lock()
+					bitmap, exists := cmd.BitMapStore[key]
+					if exists {
+						bitmap.GetBit(key, pos)
+					}
+					cmd.BitMapStoreMu.Unlock()
+				}
+			
+			case "BITCOUNT":
+				if len(args) == 1 {
+					key := args[0].Bulk
+					cmd.BitMapStoreMu.Lock()
+					bitmap, exists := cmd.BitMapStore[key]
+					if exists {
+						bitmap.PopCount(key)
+					}
+					cmd.BitMapStoreMu.Unlock()
 				}
 			}
 		}
@@ -235,7 +285,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "SETBIT" {
 				aof.Write(value)
 			}
 

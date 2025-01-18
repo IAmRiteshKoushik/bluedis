@@ -190,6 +190,15 @@ func Delete(args []resp.Value) resp.Value {
             deletedCount++
         }
         ListStoreMu.Unlock()
+
+		// Remove key from bitMapStore
+		BitMapStoreMu.Lock()
+		if _, ok := BitMapStore[key]; ok {
+			delete(BitMapStore, key)
+			fmt.Println("DEL: bitMap key=", key)
+			deletedCount++
+		}
+		BitMapStoreMu.Unlock()
     }
     fmt.Println("DEL: deletedCount=", deletedCount)
     return resp.Value{
