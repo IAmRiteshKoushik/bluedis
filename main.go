@@ -103,12 +103,10 @@ func main() {
 					}
 					
 					if command == "LPUSH" {
-						// For LPUSH, process values in reverse order to maintain correct order
-						for i := len(args) - 1; i >= 1; i-- {
+						for i := 1; i < len(args); i++ {
 							list.PushLeft(args[i].Bulk)
 						}
 					} else { // RPUSH
-						// For RPUSH, process values in forward order
 						for i := 1; i < len(args); i++ {
 							list.PushRight(args[i].Bulk)
 						}
@@ -285,7 +283,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "SETBIT" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" || command == "SETBIT" {
 				aof.Write(value)
 			}
 
