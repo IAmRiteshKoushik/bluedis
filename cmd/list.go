@@ -229,7 +229,7 @@ func Blpop(args []resp.Value) resp.Value {
 		for _, key := range keys {
 			list, exists := ListStore[key.Bulk]
 			if exists && list.Length() > 0 {
-				value, _ := list.PopLeft()
+				value:= list.BlockingPopLeft()
 				ListStoreMu.Unlock()
 
 				return resp.Value{

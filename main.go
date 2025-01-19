@@ -134,7 +134,7 @@ func main() {
 								list.PopRight()
 							}
 						}
-						// Remove the key if list is empty
+						// Remove the key if list is empty.
 						if list.Length() == 0 {
 							delete(cmd.ListStore, key)
 						}
@@ -144,18 +144,21 @@ func main() {
 			
 			case "BLPOP":
 				if len(args) >= 2 {
-					key := args[0].Bulk
-					cmd.ListStoreMu.Lock()
-					list, exists := cmd.ListStore[key]
-					if exists && list.Length() > 0 {
-						list.BlockingPopLeft()
-						// Remove the key if list is empty
-						if list.Length() == 0 {
-							delete(cmd.ListStore, key)
+					// Extract keys and timeout.
+					keys := args[:len(args)-1]
+			
+					for _, key := range keys {
+						cmd.ListStoreMu.Lock()
+						list, exists := cmd.ListStore[key.Bulk]
+						if exists && list.Length() > 0 {
+							list.BlockingPopLeft()
+							cmd.ListStoreMu.Unlock()
+							return // Return after successfully popping the first non-empty list.
 						}
+						cmd.ListStoreMu.Unlock()
 					}
-					cmd.ListStoreMu.Unlock()
 				}
+			
 			case "SETBIT":
 				if len(args) == 3 {
 					key := args[0].Bulk
