@@ -25,6 +25,10 @@ type Value struct {
 	Array []Value
 }
 
+func (v Value) String() any {
+	panic("unimplemented")
+}
+
 func (v Value) Marshal() []byte {
 
 	// For writing data back, we need to Marshal the data into RESP. We are doing

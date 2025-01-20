@@ -89,6 +89,16 @@ func main() {
 					delete(cmd.SETs, arg.Bulk)
 					cmd.SETsMu.Unlock()
 				}
+			case "CF.ADD":
+				cmd.CuckooAdd(args)
+			case "CF.CONTAINS":
+				cmd.CuckooContains(args)
+			case "CF.REMOVE":
+				cmd.CuckooRemove(args)
+			case "CF.CREATE":
+				cmd.CuckooCreate(args)
+			case "CF.RESERVE":
+				cmd.CfReserve(args)
 			}
 		}
 	})
