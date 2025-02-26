@@ -324,7 +324,7 @@ func main() {
 				continue
 			}
 
-			// In your main command processing logic
+			// Append "write" commands to AOF
 			if validator, exists := validCommandValidation[command]; exists && validator(args) {
 				aof.Write(value)
 			}
