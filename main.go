@@ -15,6 +15,45 @@ import (
 
 )
 
+// Validator helper functions
+func isValidCount(countStr string) bool {
+	count, err := strconv.Atoi(countStr)
+	return err == nil && count > 0
+}
+
+func isValidTimeout(timeoutStr string) bool {
+	timeout, err := strconv.Atoi(timeoutStr)
+	return err == nil && timeout >= 0
+}
+
+// Command validation map
+var validCommandValidation = map[string]func([]resp.Value) bool{
+	"SET": func(args []resp.Value) bool {
+		return len(args) == 2
+	},
+	"HSET": func(args []resp.Value) bool {
+		return len(args) == 3
+	},
+	"LPUSH": func(args []resp.Value) bool {
+		return len(args) >= 2
+	},
+	"RPUSH": func(args []resp.Value) bool {
+		return len(args) >= 2
+	},
+	"LPOP": func(args []resp.Value) bool {
+		return len(args) == 1 || (len(args) == 2 && isValidCount(args[1].Bulk))
+	},
+	"RPOP": func(args []resp.Value) bool {
+		return len(args) == 1 || (len(args) == 2 && isValidCount(args[1].Bulk))
+	},
+	"BLPOP": func(args []resp.Value) bool {
+		return len(args) >= 2 && isValidTimeout(args[len(args)-1].Bulk)
+	},
+	"SETBIT": func(args []resp.Value) bool {
+		return len(args) == 3
+	},
+}
+
 func main() {
 
 	// Creating a new server / listener
@@ -285,8 +324,8 @@ func main() {
 				continue
 			}
 
-			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" || command == "SETBIT" {
+			// In your main command processing logic
+			if validator, exists := validCommandValidation[command]; exists && validator(args) {
 				aof.Write(value)
 			}
 
