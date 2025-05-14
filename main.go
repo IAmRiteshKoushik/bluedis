@@ -179,7 +179,7 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP"|| command == "ZADD" || command == "ZREM" || command == "ZRANGE" || command == "ZUPDATE" || command == "ZTOPK" || command == "ZRANKTOP" || command == "ZRANKBOTTOM" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP"|| command == "ZADD" || command == "ZREM"  || command == "ZUPDATE" {
 				aof.Write(value)
 			}
 
