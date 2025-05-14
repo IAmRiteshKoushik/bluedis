@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/IAmRiteshKoushik/bluedis/aof"
 	"github.com/IAmRiteshKoushik/bluedis/cmd"
@@ -76,7 +75,8 @@ func main() {
 		if value.Typ == "array" && len(value.Array) > 0 {
 			command := strings.ToUpper(value.Array[0].Bulk)
 			args := value.Array[1:]
-
+			handler := cmd.Handlers[command]
+      handler(args)
 			switch command {
 			case "SET":
 				if len(args) >= 2 {

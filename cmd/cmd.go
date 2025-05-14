@@ -32,6 +32,12 @@ var Handlers = map[string]func([]resp.Value) resp.Value{
 	"SETBIT":   SetBit,
   "GETBIT":   GetBit,
   "BITCOUNT": BitCount,
+  "BF.ADD":     BFAdd,
+	"BF.EXISTS":  BFExists,
+	"BF.MADD":    BFMAdd,
+	"BF.MEXISTS": BFMExists,
+	"BF.INSERT":  BFInsert,
+	"BF.RESERVE": BFReserve,
 }
 
 type Values struct {
