@@ -163,26 +163,46 @@ func Get(args []resp.Value) resp.Value {
 }
 
 func Delete(args []resp.Value) resp.Value {
-	if len(args) < 1 {
-		return resp.Value{
-			Typ: "error",
-			Str: "ERR wrong number of arguments for 'del' command",
-		}
-	}
-	deletedCount := 0
-	for _, arg := range args {
-		key := arg.Bulk
-		SETsMu.Lock()
-		if _, ok := SETs[key]; ok {
-			delete(SETs, key)
-			fmt.Println("DEL: key=", key)
+    if len(args) < 1 {
+        return resp.Value{
+            Typ: "error",
+            Str: "ERR wrong number of arguments for 'del' command",
+        }
+    }
+    deletedCount := 0
+    for _, arg := range args {
+        key := arg.Bulk
+
+        // Remove key from SETs
+        SETsMu.Lock()
+        if _, ok := SETs[key]; ok {
+            delete(SETs, key)
+            fmt.Println("DEL: key=", key)
+            deletedCount++
+        }
+        SETsMu.Unlock()
+
+        // Remove key from listStore
+        ListStoreMu.Lock()
+        if _, ok := ListStore[key]; ok {
+            delete(ListStore, key)
+            fmt.Println("DEL: list key=", key)
+            deletedCount++
+        }
+        ListStoreMu.Unlock()
+
+		// Remove key from bitMapStore
+		BitMapStoreMu.Lock()
+		if _, ok := BitMapStore[key]; ok {
+			delete(BitMapStore, key)
+			fmt.Println("DEL: bitMap key=", key)
 			deletedCount++
 		}
-		SETsMu.Unlock() // Also delete from expiry map
-	}
-	fmt.Println("DEL: deletedCount=", deletedCount)
-	return resp.Value{
-		Typ: "integer",
-		Num: deletedCount,
-	}
+		BitMapStoreMu.Unlock()
+    }
+    fmt.Println("DEL: deletedCount=", deletedCount)
+    return resp.Value{
+        Typ: "integer",
+        Num: deletedCount,
+    }
 }

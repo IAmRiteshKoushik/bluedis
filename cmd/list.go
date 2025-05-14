@@ -10,27 +10,56 @@ import (
 	"github.com/IAmRiteshKoushik/bluedis/store"
 )
 
-var listStore = make(map[string]*store.DoublyLinkedList)
-var listStoreMu sync.Mutex
+var ListStore = make(map[string]*store.DoublyLinkedList)
+var ListStoreMu sync.Mutex
 
 func Lpush(args []resp.Value) resp.Value {
-	if len(args) != 2 {
+	if len(args) < 2 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'lpush' command"}
 	}
 
 	key := args[0].Bulk
-	value := args[1].Bulk
+	elements := args[1:]
 
-	listStoreMu.Lock()
-	list, exists := listStore[key]
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
 	if !exists {
 		list = store.NewDoublyLinkedList()
-		listStore[key] = list
+		ListStore[key] = list
 	}
-	listStoreMu.Unlock()
-	length := list.PushLeft(value)
+	for _, element := range elements {
+		list.PushLeft(element.Bulk)
+	}
+	length := list.Length()
+	ListStoreMu.Unlock()
 
 	return resp.Value{Typ: "integer", Num: length}
+}
+
+func Rpush(args []resp.Value) resp.Value {
+	if len(args) < 2 {
+		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'rpush' command"}
+	}
+
+	key := args[0].Bulk
+	elements := args[1:]
+
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
+	if (!exists) {
+		list = store.NewDoublyLinkedList()
+		ListStore[key] = list
+	}
+	for _, element := range elements {
+		list.PushRight(element.Bulk)
+	}
+	length := list.Length()
+	ListStoreMu.Unlock()
+
+	return resp.Value{
+		Typ: "integer",
+		Num: length,
+	}
 }
 
 func Lpop(args []resp.Value) resp.Value {
@@ -48,56 +77,30 @@ func Lpop(args []resp.Value) resp.Value {
 		}
 	}
 
-	listStoreMu.Lock()
-	list, exists := listStore[key]
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
 	if !exists || list.Length() == 0 {
-		listStoreMu.Unlock()
-		fmt.Println("List does not exist or is empty")
+		ListStoreMu.Unlock()
 		return resp.Value{Typ: "null"}
 	}
-	listStoreMu.Unlock()
 
 	result := make([]resp.Value, 0, count)
 	for i := 0; i < count && list.Length() > 0; i++ {
 		value, ok := list.PopLeft()
 		if !ok {
-			fmt.Println("Failed to pop from list")
+			ListStoreMu.Unlock()
 			return resp.Value{Typ: "null"}
 		}
 		result = append(result, resp.Value{Typ: "bulk", Bulk: fmt.Sprintf("%v", value)})
 	}
+	ListStoreMu.Unlock()
 
-	// If only one element is popped, return it as a bulk string wrapped in a Value.
 	if len(result) == 1 {
-		return resp.Value{Typ: "bulk", Bulk: result[0].Bulk}
+		return result[0]
 	}
-	// Otherwise, return an array of bulk strings.
-	return resp.Value{Typ: "array", Array: result}
-}
-
-func Rpush(args []resp.Value) resp.Value {
-	if len(args) < 2 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'rpush' command"}
-	}
-
-	key := args[0].Bulk
-	elements := args[1:]
-
-	listStoreMu.Lock()
-	list, exists := listStore[key]
-	if !exists {
-		list = store.NewDoublyLinkedList()
-		listStore[key] = list
-	}
-	for _, element := range elements {
-		list.PushRight(element.Bulk)
-	}
-	length := list.Length()
-	listStoreMu.Unlock()
-
 	return resp.Value{
-		Typ: "integer",
-		Num: length,
+		Typ:   "array",
+		Array: result,
 	}
 }
 
@@ -116,10 +119,10 @@ func Rpop(args []resp.Value) resp.Value {
 		}
 	}
 
-	listStoreMu.Lock()
-	list, exists := listStore[key]
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
 	if !exists || list.Length() == 0 {
-		listStoreMu.Unlock()
+		ListStoreMu.Unlock()
 		return resp.Value{Typ: "null"}
 	}
 
@@ -128,7 +131,7 @@ func Rpop(args []resp.Value) resp.Value {
 		value, _ := list.PopRight()
 		result = append(result, resp.Value{Typ: "bulk", Bulk: fmt.Sprintf("%v", value)})
 	}
-	listStoreMu.Unlock()
+	ListStoreMu.Unlock()
 
 	if len(result) == 1 {
 		return result[0]
@@ -146,13 +149,13 @@ func Llen(args []resp.Value) resp.Value {
 
 	key := args[0].Bulk
 
-	listStoreMu.Lock()
-	list, exists := listStore[key]
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
 	length := 0
 	if exists {
 		length = list.Length()
 	}
-	listStoreMu.Unlock()
+	ListStoreMu.Unlock()
 
 	return resp.Value{
 		Typ: "integer",
@@ -172,10 +175,10 @@ func Lrange(args []resp.Value) resp.Value {
 		return resp.Value{Typ: "error", Str: "ERR invalid arguments for 'lrange' command"}
 	}
 
-	listStoreMu.Lock()
-	list, exists := listStore[key]
+	ListStoreMu.Lock()
+	list, exists := ListStore[key]
 	if !exists {
-		listStoreMu.Unlock()
+		ListStoreMu.Unlock()
 		return resp.Value{
 			Typ:   "array",
 			Array: []resp.Value{},
@@ -187,7 +190,7 @@ func Lrange(args []resp.Value) resp.Value {
 	for i, v := range values {
 		result[i] = resp.Value{Typ: "bulk", Bulk: fmt.Sprintf("%v", v)}
 	}
-	listStoreMu.Unlock()
+	ListStoreMu.Unlock()
 
 	return resp.Value{
 		Typ:   "array",
@@ -222,12 +225,12 @@ func Blpop(args []resp.Value) resp.Value {
 
 	for {
 		// Check all keys under lock.
-		listStoreMu.Lock()
+		ListStoreMu.Lock()
 		for _, key := range keys {
-			list, exists := listStore[key.Bulk]
+			list, exists := ListStore[key.Bulk]
 			if exists && list.Length() > 0 {
-				value, _ := list.PopLeft()
-				listStoreMu.Unlock()
+				value:= list.BlockingPopLeft()
+				ListStoreMu.Unlock()
 
 				return resp.Value{
 					Typ: "array",
@@ -238,7 +241,7 @@ func Blpop(args []resp.Value) resp.Value {
 				}
 			}
 		}
-		listStoreMu.Unlock()
+		ListStoreMu.Unlock()
 
 		// Wait for either timeout or next tick.
 		select {
